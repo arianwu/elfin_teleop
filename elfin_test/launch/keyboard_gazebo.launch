@@ -1,0 +1,7 @@
+<launch>
+
+	<node name="keyboard_driver" pkg="elfin_test" type="key_publisher" respawn="false" output="screen"/>
+	<node name="keyboard_to_joints" pkg="elfin_test" type="keyboard_to_joints" respawn="false" output="log"/>
+	<node name="elfin_gazebo" pkg="elfin_test" type="elfin_gazebo" respawn="false" output="screen"/>
+
+</launch>

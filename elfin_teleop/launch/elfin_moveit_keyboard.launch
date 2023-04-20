@@ -1,0 +1,8 @@
+<launch>
+	<arg name="display" default="false"/>
+
+	<include file="$(find elfin5_moveit_config)/launch/moveit_planning_execution.launch" pass_all_args="true"/>
+	
+	<node name="elfin_moveit_keyboard"  pkg="elfin_teleop" type="elfin_moveit_keyboard"/>
+	<node name="keyboard_driver"  pkg="keyboard_driver" type="keyboard_driver"/>
+</launch>

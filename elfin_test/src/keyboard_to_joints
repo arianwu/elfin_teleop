@@ -1,0 +1,94 @@
+#!/usr/bin/env python
+import time
+import copy
+import roslib
+import rospy
+from std_msgs.msg import String
+from sensor_msgs.msg import JointState
+
+# ---------------- CLASS ----------------
+class KeyboardToJointsNode():
+    def __init__(self):
+        print('KeyboardToJointsNode: initializing node')
+
+        # Initialize Variables
+        self.joint_upper_limit = [ 1,  1,  1,  1,  1,  1]
+        self.joint_lower_limit = [-1, -1, -1, -1, -1, -1]
+        self.joint_position = [0, 0, 0, 0, 0, 0]
+        self.joint_names = ['elfin_joint1', 'elfin_joint2', 'elfin_joint3', 'elfin_joint4', 'elfin_joint5', 'elfin_joint6']
+        self.cmd_joints = JointState()
+        self.cmd_joints.name = self.joint_names
+
+        # ROS Infrastructure
+        self.sub_keys = rospy.Subscriber('keys', String, self.keys_callback)
+        self.pub_joint_states = rospy.Publisher('joint_command', JointState, queue_size=10)
+
+        rospy.sleep(1)
+
+
+    def keys_callback(self, msg):
+        i = 0.1
+        key = msg.data
+        unlimited_joints = copy.copy(self.joint_position)
+        if(key=="q"):
+            unlimited_joints[0] += i
+        elif(key=="a"):
+            unlimited_joints[0] -= i
+        
+        elif(key=="w"):
+            unlimited_joints[1] += i
+        elif(key=="s"):
+            unlimited_joints[1] -= i
+     
+        elif(key=="e"):
+            unlimited_joints[2] += i
+        elif(key=="d"):
+            unlimited_joints[2] -= i
+     
+        elif(key=="r"):
+            unlimited_joints[3] += i
+        elif(key=="f"):
+            unlimited_joints[3] -= i
+     
+        elif(key=="t"):
+            unlimited_joints[4] += i
+        elif(key=="g"):
+            unlimited_joints[4] -= i
+     
+        elif(key=="y"):
+            unlimited_joints[5] += i
+        elif(key=="h"):
+            unlimited_joints[5] -= i
+
+        elif(key=="z"):
+            unlimited_joints = [0, 0, 0, 0, 0, 0]
+        elif(key=="m"):
+            unlimited_joints = [-0.5, 0.33, -0.60, 0, 0.30, 0.0]
+
+        self.joint_position = self.limit_joints(unlimited_joints)
+        
+        self.cmd_joints.header.stamp = rospy.Time.now()
+        self.cmd_joints.position = self.joint_position
+        self.pub_joint_states.publish(self.cmd_joints)
+
+
+    def limit_joints(self, q):
+        limited = copy.copy(q)
+        for i in range(6):
+            if q[i] > self.joint_upper_limit[i]:
+                limited[i] = self.joint_upper_limit[i]
+            elif q[i] < self.joint_lower_limit[i]:
+                limited[i] = self.joint_lower_limit[i]
+        return limited
+
+
+if __name__ == '__main__':
+    print('starting keyboard_to_joints')
+    rospy.init_node('keyboard_to_joints', disable_signals=True)
+    node = KeyboardToJointsNode()
+
+    try:
+        rospy.spin()
+    except:  # rospy.ROSInterruptException:
+        print('caught exception')
+    print('exiting')

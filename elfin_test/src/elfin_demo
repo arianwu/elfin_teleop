@@ -1,0 +1,221 @@
+#!/usr/bin/env python
+import sys
+import time
+import copy
+import rospy
+import numpy as np
+from std_msgs.msg import String
+from sensor_msgs.msg import JointState
+
+import moveit_commander
+import moveit_msgs.msg
+import geometry_msgs.msg
+from moveit_commander.conversions import pose_to_list
+
+# ---------------- CLASS ----------------
+class ElfinDemoNode():
+    def __init__(self):
+        print('ElfinDemoNode: initializing node')
+
+        moveit_commander.roscpp_initialize(sys.argv)
+        rospy.init_node('elfin_demo', disable_signals=True)
+
+        # Initialize Variables
+        self.joint_upper_limit = np.array([ 3.14,  2.35,  2.61,  3.14,  2.56,  3.14])
+        self.joint_lower_limit = np.array([-3.14, -2.35, -2.61, -3.14, -2.56, -3.14])
+        self.joint_position = np.zeros(6)
+        self.joint_names = ['elfin_joint1', 'elfin_joint2', 'elfin_joint3', 'elfin_joint4', 'elfin_joint5', 'elfin_joint6']
+        self.joint_states = np.zeros(6)
+
+        # ROS Infrastructure
+        #self.sub_joint_command = rospy.Subscriber('/joint_command', JointState, self.joint_command_callback)
+        self.sub_joint_states = rospy.Subscriber('/joint_states', JointState, self.joint_states_callback)
+        self.sub_keys = rospy.Subscriber('/keys', String, self.keys_callback)
+
+        # Initialize MoveIt Commander
+        robot = moveit_commander.RobotCommander()
+        scene = moveit_commander.PlanningSceneInterface()
+        group_name = "elfin_arm"
+        move_group = moveit_commander.MoveGroupCommander(group_name)
+        planning_frame = move_group.get_planning_frame()
+        eef_link = move_group.get_end_effector_link()
+        group_names = robot.get_group_names()
+
+        self.robot = robot
+        self.scene = scene
+        self.move_group = move_group
+        self.planning_frame = planning_frame
+        self.eef_link = eef_link
+        self.group_names = group_names
+
+        self.move_group.set_max_velocity_scaling_factor(1)
+        self.move_group.set_max_acceleration_scaling_factor(0.05)
+
+        rospy.sleep(1)
+
+
+    def joint_command_callback(self, msg):
+        # Extract desired final position
+        unlimited_joints = msg.position
+        # Transform from [-1..1] to radians
+        self.joint_position = self.transform_joints(unlimited_joints)
+
+        # Send position command through MoveIt
+        self.move_group.go(self.joint_position)
+        self.move_group.stop()
+
+
+    def joint_states_callback(self, msg):
+        # Store current Joint States
+        self.joint_states = np.array(msg.position)
+
+
+    def keys_callback(self, msg):
+        key = msg.data
+        print key
+        if key=='z':
+            self.move_zero()
+        elif key=='w':
+            self.move_wave()
+        elif key=='f':
+            self.move_fist()
+        elif key=='b':
+            self.move_bump()
+        elif key=='h':
+            self.move_handshake()
+        elif key=='m':
+            self.move_main()
+
+
+    def transform_joints(self, q):
+        limited = q * self.joint_upper_limit
+        limited = np.where(limited > self.joint_upper_limit, self.joint_upper_limit, limited)
+        return np.where(limited < self.joint_lower_limit, self.joint_lower_limit, limited)
+
+
+    def move_zero(self):
+        # Change Velocity and Acceleration
+        self.move_group.set_max_velocity_scaling_factor(0.2)
+        self.move_group.set_max_acceleration_scaling_factor(0.05)
+
+        self.move_group.go([0, 0, 0, 0, 0, 0])
+        self.move_group.stop()
+
+
+    def move_wave(self):
+        # Change Velocity and Acceleration
+        self.move_group.set_max_velocity_scaling_factor(0.5)
+        self.move_group.set_max_acceleration_scaling_factor(0.1)
+
+        # Rotate to face towards door
+        # Lower elbow
+        self.move_group.go([np.pi/2, np.pi/2, np.pi/2, np.pi/2, 0, 0])
+        self.move_group.stop()
+
+        # Change Velocity and Acceleration
+        self.move_group.set_max_velocity_scaling_factor(1)
+        self.move_group.set_max_acceleration_scaling_factor(1)
+        for i in range(2):
+            # Wave to the right
+            self.move_group.go([np.pi/2, np.pi/2, np.pi/2, np.pi/2, np.pi/7, 0])
+            self.move_group.stop()
+
+            # Wave to the left
+            self.move_group.go([np.pi/2, np.pi/2, np.pi/2, np.pi/2, -np.pi/7, 0])
+            self.move_group.stop()
+
+        # Wave to the center
+        self.move_group.go([np.pi/2, np.pi/2, np.pi/2, np.pi/2, 0, 0])
+        self.move_group.stop()
+
+        # Change Velocity and Acceleration
+        self.move_group.set_max_velocity_scaling_factor(0.1)
+        self.move_group.set_max_acceleration_scaling_factor(0.01)
+
+
+    def move_fist(self):
+        # Change Velocity and Acceleration
+        self.move_group.set_max_velocity_scaling_factor(0.5)
+        self.move_group.set_max_acceleration_scaling_factor(0.05)
+        self.move_group.go(np.deg2rad([90, 15, -145, 0, 70, 0]))
+        self.move_group.stop()
+
+
+    def move_bump(self):
+        self.move_fist()
+
+        # Change Velocity and Acceleration
+        self.move_group.set_max_velocity_scaling_factor(0.05)
+        self.move_group.set_max_acceleration_scaling_factor(0.01)
+
+        # Bump out
+        waypoints = []
+        wpose = self.move_group.get_current_pose().pose
+        wpose.position.y -= 0.20  # move in y
+        waypoints.append(copy.deepcopy(wpose))
+
+        plan, fraction = self.move_group.compute_cartesian_path(
+                                                           waypoints,   # waypoints to follow
+                                                           0.01,        # eef_step
+                                                           0.0)         # jump_threshold
+        self.move_group.execute(plan, wait=True)
+
+        rospy.sleep(1)
+
+        # Bump in
+        waypoints = []
+        wpose = self.move_group.get_current_pose().pose
+        wpose.position.y += 0.20  # move in y
+        waypoints.append(copy.deepcopy(wpose))
+
+        plan, fraction = self.move_group.compute_cartesian_path(
+                                                           waypoints,   # waypoints to follow
+                                                           0.01,        # eef_step
+                                                           0.0)         # jump_threshold
+        self.move_group.execute(plan, wait=True)
+
+
+    def move_handshake(self):
+        # Change Velocity and Acceleration
+        self.move_group.set_max_velocity_scaling_factor(0.001)
+        self.move_group.set_max_acceleration_scaling_factor(0.001)
+
+        self.move_main()
+        waypoints = []
+        wpose = self.move_group.get_current_pose().pose
+        wpose.position.z -= 0.05  # move in z
+        waypoints.append(copy.deepcopy(wpose))
+
+        wpose.position.z += 0.10  # move in z
+        waypoints.append(copy.deepcopy(wpose))
+
+        wpose.position.z -= 0.10  # move in z
+        waypoints.append(copy.deepcopy(wpose))
+
+        wpose.position.z += 0.05  # move in z
+        waypoints.append(copy.deepcopy(wpose))
+
+        plan, fraction = self.move_group.compute_cartesian_path(
+                                                           waypoints,   # waypoints to follow
+                                                           0.01,        # eef_step
+                                                           0.0)         # jump_threshold
+        self.move_group.execute(plan, wait=True)
+
+
+    def move_main(self):
+        # Change Velocity and Acceleration
+        self.move_group.set_max_velocity_scaling_factor(0.5)
+        self.move_group.set_max_acceleration_scaling_factor(0.05)
+        self.move_group.go(np.deg2rad([90, 45, -90, 0, 45, 0]))
+        self.move_group.stop()
+
+
+if __name__ == '__main__':
+    print('starting elfin_demo')
+    node = ElfinDemoNode()
+
+    try:
+        rospy.spin()
+    except:
+        print('caught exception')
+    print('exiting')

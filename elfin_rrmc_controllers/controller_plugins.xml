@@ -1,0 +1,10 @@
+<library path="lib/libelfin_rrmc_controllers">
+
+  <class name="elfin_rrmc_controllers/RRMCPositionController" type="elfin_rrmc_controllers::RRMCPositionController" base_class_type="controller_interface::ControllerBase">
+    <description>
+	    Elfin Resolved-Rate Motion Control
+    </description>
+  </class>
+
+</library>
+

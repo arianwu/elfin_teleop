@@ -1,0 +1,10 @@
+<launch>
+	<include file="$(find elfin5_moveit_config)/launch/move_group.launch">
+  	<arg name="publish_monitored_planning_scene" value="true" />
+ 	</include>
+
+	<node name="keyboard_driver" pkg="keyboard_driver" type="keyboard_driver" respawn="false" output="screen"/>
+	<node name="keyboard_to_joints" pkg="elfin_test" type="keyboard_to_joints" respawn="false" output="log"/>
+	<node name="elfin_moveit" pkg="elfin_test" type="elfin_moveit" respawn="false" output="log"/>
+
+</launch>

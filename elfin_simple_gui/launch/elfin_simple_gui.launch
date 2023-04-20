@@ -1,0 +1,3 @@
+<launch>
+	<node name="elfin_simple_gui"  pkg="elfin_simple_gui" type="elfin_simple_gui.py"/>
+</launch>

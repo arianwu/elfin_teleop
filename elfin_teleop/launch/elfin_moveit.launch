@@ -1,0 +1,8 @@
+<launch>
+	<arg name="display" default="false"/>
+
+	<include file="$(find elfin5_moveit_config)/launch/moveit_planning_execution.launch" pass_all_args="true"/>
+
+	<node name="elfin_moveit"  pkg="elfin_teleop" type="elfin_moveit"/>
+	<node name="elfin_keys_to_joints"  pkg="elfin_teleop" type="elfin_keys_to_joints"/>
+</launch>

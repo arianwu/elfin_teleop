@@ -1,0 +1,134 @@
+#!/usr/bin/env python
+import time
+import copy
+import roslib#; roslib.load_manifest('ur_driver')
+import rospy
+import actionlib
+import numpy as np
+from std_msgs.msg import String
+from control_msgs.msg import *
+from trajectory_msgs.msg import *
+from sensor_msgs.msg import JointState
+
+# ---------------- CLASS ----------------
+class ElfinGazeboNode():
+    def __init__(self):
+        print('ElfinGazeboNode: initializing node')
+
+        # Initialize Variables
+        self.joint_upper_limit = np.array([ 3.14,  2.35,  2.61,  3.14,  2.56,  3.14])
+        self.joint_lower_limit = np.array([-3.14, -2.35, -2.61, -3.14, -2.56, -3.14])
+        self.joint_position = np.zeros(6)
+        self.joint_names = ['elfin_joint1', 'elfin_joint2', 'elfin_joint3', 'elfin_joint4', 'elfin_joint5', 'elfin_joint6']
+
+        self.joint_states = np.zeros(6)
+        self.max_velocity = np.full((6), 1.57)
+        self.velocity_scale = 0.6
+        self.blend_proportion = 0.25
+
+        # ROS Infrastructure
+        self.sub_joint_command = rospy.Subscriber('/joint_command', JointState, self.joint_command_callback)
+        self.sub_joint_states = rospy.Subscriber('/joint_states', JointState, self.joint_states_callback)
+
+        # Action Library for ros_control
+        self.robot_client = actionlib.SimpleActionClient('elfin_arm_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
+        
+        print "Waiting for server..."
+        self.robot_client.wait_for_server()
+        print "Connected to server"
+
+        self.g = FollowJointTrajectoryGoal()
+        self.g.trajectory = JointTrajectory()
+        self.g.trajectory.joint_names = self.joint_names
+
+        # Initial position (not implemented for security reasons)
+        self.g.trajectory.points = [ JointTrajectoryPoint(positions=np.array(self.joint_position), velocities=[0]*6,time_from_start=rospy.Duration(2.0))]
+        #self.robot_client.send_goal(self.g)
+        #self.robot_client.wait_for_result()
+        rospy.sleep(1)
+
+
+    def main(self):
+        # Main Loop
+        rate = rospy.Rate(100)
+        while not rospy.is_shutdown():
+            rate.sleep()
+
+
+    def joint_command_callback(self, msg):
+        # Extract desired final position
+        unlimited_joints = msg.position
+        # Transform from [-1..1] to radians
+        self.joint_position = self.transform_joints(unlimited_joints)
+
+        tt, positions, velocities = self.calculate_trapezoidal(q0=self.joint_states, qf=self.joint_position)
+        points = []
+        for t, position, velocity in zip(tt, positions, velocities):
+            points.append(JointTrajectoryPoint(positions=position, velocities=velocity, time_from_start=rospy.Duration(t)))
+            print(t.round(2))
+            print(position.round(2))
+            print(velocity.round(2))
+            print("---")
+
+        print(tt.round(2))
+        print("")
+        print(positions.round(2))
+        print("")
+        print(velocities.round(2))
+        print("")
+        print("")
+
+        # Send goal to controller
+        self.robot_client.cancel_goal()
+        self.g.trajectory.points = points  # [ JointTrajectoryPoint(positions=self.joint_position, velocities=[0]*6, time_from_start=rospy.Duration(2.008))]
+        self.robot_client.send_goal(self.g)
+        self.robot_client.wait_for_result()
+
+
+    def joint_states_callback(self, msg):
+        # Store current Joint States
+        self.joint_states = np.array(msg.position)
+
+
+    def transform_joints(self, q):
+        limited = q * self.joint_upper_limit
+        limited = np.where(limited > self.joint_upper_limit, self.joint_upper_limit, limited)
+        return np.where(limited < self.joint_lower_limit, self.joint_lower_limit, limited)
+
+
+    def calculate_trapezoidal(self, q0, qf):
+        # Calculate parameters to describe the trapezoidal profile
+        dq_max = self.max_velocity * self.velocity_scale
+        tb = np.max(np.abs( (qf - q0) / dq_max * self.blend_proportion / (1 - self.blend_proportion) ))
+        tf = tb / self.blend_proportion
+        dq_max = (qf - q0) / tb * self.blend_proportion / (1 - self.blend_proportion)
+
+        # Determine points
+        tt = np.linspace(0, tf, 5)
+        position = np.zeros((tt.size, 6))
+        velocity = position.copy()
+        for i, t in enumerate(tt):
+            if t <= tb:
+                position[i] = q0 + 0.5 * dq_max / tb * t ** 2
+                velocity[i] = dq_max / tb * t
+            elif tb < t <= tf-tb:
+                position[i] = q0 - 0.5 * tb * dq_max + dq_max * t
+                velocity[i] = dq_max
+            else:
+                position[i] = qf - 0.5 * dq_max / tb * (t - tf) ** 2
+                velocity[i] = - dq_max / tb * (t - tf)
+        return tt, position, velocity
+
+
+if __name__ == '__main__':
+    print('starting elfin_gazebo')
+    rospy.init_node('elfin_gazebo', disable_signals=True)
+    node = ElfinGazeboNode()
+
+    try:
+        # node.main()
+        rospy.spin()
+    except:  # rospy.ROSInterruptException:
+        node.robot_client.cancel_goal()
+        print('caught exception')
+    print('exiting')

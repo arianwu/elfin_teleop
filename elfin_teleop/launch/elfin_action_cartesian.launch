@@ -1,0 +1,4 @@
+<launch>
+	<node name="elfin_action_cartesian" pkg="elfin_teleop" type="elfin_action_cartesian" output="screen" />
+	<node name="elfin_ik_solver_server_v2" pkg="elfin_ik_solver" type="elfin_ik_solver_server_v2" output="log" />
+</launch>

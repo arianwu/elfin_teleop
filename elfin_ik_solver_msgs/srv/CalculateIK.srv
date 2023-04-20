@@ -1,0 +1,5 @@
+geometry_msgs/Pose desired_pose
+float64[] seed_state
+---
+std_msgs/Bool found
+sensor_msgs/JointState solution
